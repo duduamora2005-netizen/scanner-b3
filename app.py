@@ -7,35 +7,41 @@ def buscar_dados_yfinance(ticker):
     try:
         ticker_completo = ticker if ticker.endswith(".SA") else ticker + ".SA"
         t = yf.Ticker(ticker_completo)
-        df = t.history(period="10d")
         
-        if df.empty or len(df) < 5:
+        # Busca 12 dias para garantir que tenhamos pelo menos 6 pregões úteis
+        df = t.history(period="12d")
+        if df.empty or len(df) < 6:
             return None
             
-        fechamentos = df['Close'].dropna().tail(5).tolist()
-        fechamentos = [float(f) for f in fechamentos]
-        fechamentos.reverse() # Hoje -> Antigo
+        # Pega os últimos 6 valores de fechamento
+        dados = df['Close'].dropna().tail(6).tolist()
+        dados = [float(f) for f in dados]
+        dados.reverse() # [Hoje(0), 1, 2, 3, 4, Base(5)]
         
-        # Lógica de cores: compara dia atual com o dia anterior
         variacoes_com_cores = []
-        for i in range(len(fechamentos)):
-            valor = fechamentos[i]
-            cor = "neutro"
-            if i < len(fechamentos) - 1:
-                if valor > fechamentos[i + 1]:
-                    cor = "verde"
-                elif valor < fechamentos[i + 1]:
-                    cor = "vermelho"
+        # Processa apenas os 5 valores que você quer exibir
+        for i in range(5):
+            valor = dados[i]
+            valor_anterior = dados[i + 1] # O 5º valor compara com o 6º
+            
+            if valor > valor_anterior:
+                cor = "verde"
+            elif valor < valor_anterior:
+                cor = "vermelho"
+            else:
+                cor = "neutro"
             
             variacoes_com_cores.append({"valor": valor, "cor": cor})
             
         return {
             "Ativo": ticker_completo.upper(),
-            "Preço": f"{fechamentos[0]:.2f}",
-            "Suporte": f"{min(fechamentos):.2f}",
-            "Resistência": f"{max(fechamentos):.2f}",
-            "Tendência": "ALTA" if fechamentos[0] >= fechamentos[-1] else "BAIXA",
-            "UltimasVariacoes": variacoes_com_cores
+            "Preço": f"{dados[0]:.2f}",
+            "Suporte": f"{min(dados[:5]):.2f}",
+            "Resistência": f"{max(dados[:5]):.2f}",
+            "RSI": 50.0,
+            "Tendência": "ALTA" if dados[0] >= dados[4] else "BAIXA",
+            "UltimasVariacoes": variacoes_com_cores,
+            "Score": 50
         }
     except:
         return None

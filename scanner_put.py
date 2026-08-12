@@ -1,90 +1,129 @@
 import yfinance as yf
+import pandas as pd
+import numpy as np
 
-TICKERS_PADRAO = [
-    "PETR4", "VALE3", "ITUB4", "BBDC4", "BBAS3", 
-    "ABEV3", "MGLU3", "RENT3", "WEGE3", "VBBR3"
+# ===============================
+# ATIVOS
+# ===============================
+
+ativos = [
+    "ABEV3.SA",
+    "AXIA3.SA",
+    "B3SA3.SA",
+    "BBAS3.SA",
+    "BBDC3.SA",
+    "BPAC11.SA",
+    "CMIG4.SA",
+    "CSMG3.SA",
+    "EMBR3.SA",
+    "EQTL3.SA",
+    "ITUB4.SA",
+    "ITSA4.SA",
+    "PRIO3.SA",
+    "SBSP3.SA",
+    "SAPR11.SA",
+    "VBBR3.SA"
 ]
 
-def calcular_rsi(precos, periodos=14):
-    if len(precos) < periodos + 1:
-        return 50.0
-    
-    ganhos, perdas = [], []
-    for i in range(1, len(precos)):
-        diff = precos[i] - precos[i-1]
-        ganhos.append(diff if diff > 0 else 0)
-        perdas.append(abs(diff) if diff < 0 else 0)
-        
-    media_ganhos = sum(ganhos[-periodos:]) / periodos
-    media_perdas = sum(perdas[-periodos:]) / periodos
-    
-    if media_perdas == 0:
-        return 100.0
-    
-    rs = media_ganhos / media_perdas
-    return round(100 - (100 / (1 + rs)), 2)
+# ===============================
+# RSI
+# ===============================
 
-def obter_dados_ativo(ticker):
-    try:
-        ticker_b3 = f"{ticker}.SA" if not ticker.endswith('.SA') else ticker
-        ativo = yf.Ticker(ticker_b3)
-        
-        df = ativo.history(period="60d")
-        if df.empty or len(df) < 15:
-            return None
+def calcular_rsi(precos):
+    delta = precos.diff()
+    ganho = delta.clip(lower=0)
+    perda = -delta.clip(upper=0)
+    media_ganho = ganho.rolling(14).mean()
+    media_perda = perda.rolling(14).mean()
+    rs = media_ganho / media_perda
+    rsi = 100 - (100/(1+rs))
+    return float(rsi.iloc[-1])
 
-        precos_fechamento = df['Close'].dropna().tolist()
-        preco_atual = round(float(ativo.fast_info['lastPrice']), 2)
-        
-        # Suporte e Resistencia simples (Minima e Maxima de 60d)
-        suporte = round(min(precos_fechamento), 2)
-        resistencia = round(max(precos_fechamento), 2)
-        
-        var_suporte = round(((preco_atual - suporte) / suporte) * 100, 2)
-        var_resistencia = round(((resistencia - preco_atual) / preco_atual) * 100, 2)
-        
-        # RSI e Tendencia
-        rsi = calcular_rsi(precos_fechamento)
-        tendencia = "ALTA" if preco_atual > (sum(precos_fechamento[-20:]) / 20) else "BAIXA"
-        
-        # Ultimas 5 Variaçoes % (Hoje -> Antigo)
-        ultimos_6 = precos_fechamento[-6:]
-        variacoes_5d = []
-        for i in range(len(ultimos_6)-1, 0, -1):
-            var_dia = round(((ultimos_6[i] - ultimos_6[i-1]) / ultimos_6[i-1]) * 100, 2)
-            variacoes_5d.append(var_dia)
+# ===============================
+# MOVIMENTO (Quedas Consecutivas)
+# ===============================
+
+def movimentos(precos):
+    alta_atual = 0
+    queda_atual = 0
+
+    for i in range(len(precos) - 1, 0, -1):
+        if precos.iloc[i] > precos.iloc[i-1]:
+            if queda_atual > 0:
+                break
+            alta_atual += 1
+        elif precos.iloc[i] < precos.iloc[i-1]:
+            if alta_atual > 0:
+                break
+            queda_atual += 1
+        else:
+            break
+
+    return alta_atual, queda_atual
+
+# ===============================
+# SCANNER
+# ===============================
+
+def rodar_scanner():
+    resultado = []
+
+    for ativo in ativos:
+        try:
+            dados = yf.download(ativo, period="2y", progress=False)
             
-        score = round((100 - rsi) * 0.1, 1)
+            if dados.empty:
+                continue
 
-        return {
-            'ticker': ticker.upper().replace('.SA', ''),
-            'preco': preco_atual,
-            'suporte': suporte,
-            'var_suporte': var_suporte,
-            'resistencia': resistencia,
-            'var_resistencia': var_resistencia,
-            'rsi': rsi,
-            'tendencia': tendencia,
-            'variacoes_5d': variacoes_5d,
-            'score': score
-        }
-    except Exception:
-        return None
+            precos = dados["Close"]
+            
+            if isinstance(precos, pd.DataFrame):
+                precos = precos.iloc[:,0]
 
-def executar_scanner(lista_tickers=None):
-    if not lista_tickers:
-        lista_tickers = TICKERS_PADRAO
+            preco = float(precos.iloc[-1])
+            rsi = calcular_rsi(precos)
+            altas_seq, quedas_seq = movimentos(precos)
+            mm200 = float(precos.rolling(200).mean().iloc[-1])
+            
+            tendencia = "ALTA" if preco > mm200 else "BAIXA"
+            
+            suporte = float(precos.tail(120).quantile(.15))
+            resistencia = float(precos.tail(120).quantile(.85))
 
-    resultados = []
-    for ticker in lista_tickers:
-        dados = obter_dados_ativo(ticker)
-        if dados:
-            resultados.append(dados)
+            # Cálculo das Variações % até Suporte e Resistência
+            dist_suporte_pct = round(((preco - suporte) / suporte) * 100, 2)
+            dist_resistencia_pct = round(((resistencia - preco) / preco) * 100, 2)
 
-    resultados = sorted(resultados, key=lambda x: x['score'], reverse=True)
-    
-    # Atribui o Rank
-    for index, item in enumerate(resultados):
-        item['rank'] = f"#{index + 1}"
-        
-    return resultados
+            variacoes_pct = (precos.pct_change().dropna().tail(5) * 100).iloc[::-1]
+            ultimas_5_var = [round(float(v), 2) for v in variacoes_pct]
+
+            score = 0
+            
+            if tendencia == "ALTA":
+                score += 35
+            if rsi < 45:
+                score += 25
+            if quedas_seq >= 3:
+                score += 25
+            if preco > suporte:
+                score += 15
+
+            resultado.append({
+                "Ativo": ativo,
+                "Preço": round(preco, 2),
+                "RSI": round(rsi, 2),
+                "Tendência": tendencia,
+                "AltasSeq": altas_seq,
+                "QuedasSeq": quedas_seq,
+                "Suporte": round(suporte, 2),
+                "Resistência": round(resistencia, 2),
+                "DistSuportePct": dist_suporte_pct,
+                "DistResistenciaPct": dist_resistencia_pct,
+                "UltimasVariacoes": ultimas_5_var,
+                "Score": score
+            })
+
+        except Exception as e:
+            print("Erro no ativo:", ativo, e)
+
+    return sorted(resultado, key=lambda x: x["Score"], reverse=True)

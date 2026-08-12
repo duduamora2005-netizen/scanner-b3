@@ -168,11 +168,10 @@
             border-radius: 5px;
             font-size: 14px;
             font-weight: bold;
+            background: #334155;
+            color: #f8fafc;
         }
         
-        .var-pos { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
-        .var-neg { background: rgba(248, 113, 113, 0.2); color: #f87171; }
-
         .score-val {
             font-size: 24px;
             color: #38bdf8;
@@ -234,7 +233,7 @@
                 <th onclick="sortTable(6)">Var. Resistência ⇕</th>
                 <th onclick="sortTable(7)">RSI ⇕</th>
                 <th onclick="sortTable(8)">Tendência ⇕</th>
-                <th>Últimas 5 Variações % (Hoje ➔ Antigo)</th>
+                <th>Últimos 5 Fechamentos R$ (Hoje ➔ Antigo)</th>
                 <th onclick="sortTable(10)">Score ⇕</th>
             </tr>
         </thead>
@@ -257,8 +256,8 @@
                 <td>
                     <div class="var-container">
                         {% for v in acao.UltimasVariacoes %}
-                            <span class="badge-var {{ 'var-pos' if v >= 0 else 'var-neg' }}">
-                                {{ '+' if v > 0 }}{{ v }}%
+                            <span class="badge-var">
+                                R$ {{ "%.2f"|format(v) }}
                             </span>
                         {% endfor %}
                     </div>

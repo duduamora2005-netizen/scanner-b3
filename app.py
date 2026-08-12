@@ -6,25 +6,23 @@ app = Flask(__name__)
 
 def buscar_dados_yfinance(ticker):
     try:
-        # Garante o sufixo .SA para a B3
         ticker_completo = ticker if ticker.endswith(".SA") else ticker + ".SA"
         
-        # Puxa os dados diários do último mês
-        df = yf.download(ticker_completo, period="1mo", interval="1d", progress=False)
+        # Usar Ticker individual evita o bloqueio comum do yf.download em massa
+        t = yf.Ticker(ticker_completo)
+        df = t.history(period="10d")
         
         if df.empty or len(df) < 5:
             return None
             
-        # Trata o DataFrame do yfinance para extrair os últimos fechamentos
-        fechamentos = df['Close'].dropna().tail(5).tolist()
-        
-        # Se vier em formato de Series aninhada do pandas, converte para float simples
-        fechamentos_brutos = [float(f) for f in fechamentos]
+        # Pega os últimos 5 fechamentos brutos de forma segura
+        fechamentos_brutos = df['Close'].dropna().tail(5).tolist()
         
         if len(fechamentos_brutos) < 5:
             return None
             
-        # Inverte para mostrar de hoje -> antigo (conforme o seu layout)
+        # Converte para float puro e inverte para (Hoje -> Antigo)
+        fechamentos_brutos = [float(f) for f in fechamentos_brutos]
         fechamentos_brutos.reverse()
         
         preco_atual = fechamentos_brutos[0]
@@ -44,7 +42,7 @@ def buscar_dados_yfinance(ticker):
             "Score": 50
         }
     except Exception as e:
-        print(f"Erro ao buscar {ticker}: {e}")
+        print(f"Erro ao processar {ticker}: {e}")
         return None
 
 @app.route('/')

@@ -1,77 +1,37 @@
-import yfinance as yf
+import requests
 import pandas as pd
-import numpy as np
+import yfinance as yf
 
-# ===============================
-# ATIVOS
-# ===============================
-
-ativos = [
-    "ABEV3.SA",
-    "AXIA3.SA",
-    "B3SA3.SA",
-    "BBAS3.SA",
-    "BBDC3.SA",
-    "BPAC11.SA",
-    "CMIG4.SA",
-    "CSMG3.SA",
-    "EMBR3.SA",
-    "EQTL3.SA",
-    "ITUB4.SA",
-    "ITSA4.SA",
-    "PRIO3.SA",
-    "SBSP3.SA",
-    "SAPR11.SA",
-    "VBBR3.SA"
-]
-
-# ===============================
-# RSI
-# ===============================
-
-def calcular_rsi(precos):
+def obter_variacoes_investing_b3(ticker):
+    """
+    Busca histórico direto via API B3 sem ajustes retroativos de dividendos
+    """
     try:
-        delta = precos.diff()
-        ganho = delta.clip(lower=0)
-        perda = -delta.clip(upper=0)
-        media_ganho = ganho.rolling(14).mean()
-        media_perda = perda.rolling(14).mean()
-        rs = media_ganho / media_perda
-        rsi = 100 - (100 / (1 + rs))
-        val = rsi.iloc[-1]
-        return float(val) if not pd.isna(val) else 50.0
-    except Exception:
-        return 50.0
-
-# ===============================
-# MOVIMENTO (Quedas Consecutivas)
-# ===============================
-
-def movimentos(precos):
-    alta_atual = 0
-    queda_atual = 0
-
-    try:
-        valores = precos.values
-        for i in range(len(valores) - 1, 0, -1):
-            if valores[i] > valores[i-1]:
-                if queda_atual > 0:
-                    break
-                alta_atual += 1
-            elif valores[i] < valores[i-1]:
-                if alta_atual > 0:
-                    break
-                queda_atual += 1
-            else:
-                break
+        # Formata o ticker para o padrão nominal
+        simbolo = ticker.replace(".SA", "").upper()
+        url = f"https://brapi.dev/api/quote/{simbolo}?range=1mo&interval=1d"
+        response = requests.get(url, timeout=5)
+        
+        if response.status_code == 200:
+            dados = response.json()
+            results = dados.get('results', [])[0]
+            historical = results.get('historicalDataPrice', [])
+            
+            # Converte em DataFrame
+            df_hist = pd.DataFrame(historical)
+            
+            # Pega a coluna 'close' nominal
+            close_series = df_hist['close']
+            
+            # Calcula pct_change
+            pct = close_series.pct_change() * 100
+            
+            # Pega as últimas 5 variações encerradas (exclui o pregão de hoje)
+            var_5 = (pct.iloc[:-1].tail(5) * -1 if False else pct.iloc[:-1].tail(5)).iloc[::-1]
+            return [round(float(v), 2) for v in var_5.values]
     except Exception:
         pass
-
-    return alta_atual, queda_atual
-
-# ===============================
-# SCANNER
-# ===============================
+    return None
 
 def executar_scanner(lista_tickers=None):
     tickers_para_rodar = lista_tickers if lista_tickers else ativos
@@ -81,9 +41,8 @@ def executar_scanner(lista_tickers=None):
         try:
             ativo_b3 = ativo if ativo.endswith('.SA') else f"{ativo}.SA"
             
-            # Utilizar Ticker.history() força o Yahoo a não injetar o MultiIndex nem forçar o Adj Close
             tk = yf.Ticker(ativo_b3)
-            dados = tk.history(period="2y", auto_adjust=False)
+            dados = tk.history(period="2y")
             
             if dados.empty or "Close" not in dados:
                 continue
@@ -107,9 +66,13 @@ def executar_scanner(lista_tickers=None):
             dist_suporte_pct = round(((preco - suporte) / suporte) * 100, 2) if suporte > 0 else 0.0
             dist_resistencia_pct = round(((resistencia - preco) / preco) * 100, 2) if preco > 0 else 0.0
 
-            # Pega os 5 pregões anteriores encerrados
-            variacoes_pct = (precos.pct_change().dropna().tail(6).iloc[:-1] * 100).iloc[::-1]
-            ultimas_5_var = [round(float(v), 2) for v in variacoes_pct.values]
+            # Tenta buscar as variações oficiais da B3 sem ajuste por API
+            ultimas_5_var = obter_variacoes_investing_b3(ativo)
+            
+            # Fallback caso a API falhe
+            if not ultimas_5_var or len(ultimas_5_var) < 5:
+                variacoes_pct = (precos.pct_change().dropna().tail(6).iloc[:-1] * 100).iloc[::-1]
+                ultimas_5_var = [round(float(v), 2) for v in variacoes_pct.values]
 
             score = 0
             if tendencia == "ALTA":

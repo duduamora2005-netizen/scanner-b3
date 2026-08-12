@@ -1,5 +1,5 @@
-flask
-yfinance
+Flask
+requests
 pandas
-numpy
+yfinance
 gunicorn

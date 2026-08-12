@@ -1,40 +1,27 @@
 import urllib.request
 import json
-import yfinance as yf
 import pandas as pd
 import numpy as np
+import yfinance as yf
 
 # ===============================
 # ATIVOS
 # ===============================
 
 ativos = [
-    "ABEV3.SA",
-    "AXIA3.SA",
-    "B3SA3.SA",
-    "BBAS3.SA",
-    "BBDC3.SA",
-    "BPAC11.SA",
-    "CMIG4.SA",
-    "CSMG3.SA",
-    "EMBR3.SA",
-    "EQTL3.SA",
-    "ITUB4.SA",
-    "ITSA4.SA",
-    "PRIO3.SA",
-    "SBSP3.SA",
-    "SAPR11.SA",
-    "VBBR3.SA"
+    "ABEV3.SA", "AXIA3.SA", "B3SA3.SA", "BBAS3.SA",
+    "BBDC3.SA", "BPAC11.SA", "CMIG4.SA", "CSMG3.SA",
+    "EMBR3.SA", "EQTL3.SA", "ITUB4.SA", "ITSA4.SA",
+    "PRIO3.SA", "SBSP3.SA", "SAPR11.SA", "VBBR3.SA"
 ]
 
 # ===============================
-# BUSCA VARIAÇÕES OFICIAIS DA B3 (SEM YAHOO)
+# VARIAÇÕES OFICIAIS B3
 # ===============================
 
-def obter_variacoes_reais_b3(ticker):
+def obter_variacoes_oficiais_b3(ticker):
     """
-    Busca o histórico de fechamentos reais da B3 via API pública
-    para não depender dos dados com falha do Yahoo Finance.
+    Busca as variações percentuais oficiais sem o pulo de datas do Yahoo Finance.
     """
     try:
         simbolo = ticker.replace(".SA", "").upper()
@@ -45,21 +32,20 @@ def obter_variacoes_reais_b3(ticker):
             data = json.loads(response.read().decode())
             history = data['results'][0]['historicalDataPrice']
             
-            # Converte em DataFrame
             df = pd.DataFrame(history)
             df = df.sort_values('date').reset_index(drop=True)
             
-            # Pega o preço de fechamento seco (close)
+            # Variação % bruta sobre o fechamento da B3
             df['var_pct'] = df['close'].pct_change() * 100
             
-            # Remove o dia de hoje (em aberto) e pega os últimos 5 dias fechados
+            # Pega os 5 últimos pregões encerrados (do mais recente para o mais antigo)
             var_5d = df['var_pct'].dropna().iloc[:-1].tail(5).iloc[::-1]
             return [round(float(v), 2) for v in var_5d.values]
-    except Exception as e:
+    except Exception:
         return None
 
 # ===============================
-# RSI
+# INDICADORES TÉCNICOS
 # ===============================
 
 def calcular_rsi(precos):
@@ -76,34 +62,26 @@ def calcular_rsi(precos):
     except Exception:
         return 50.0
 
-# ===============================
-# MOVIMENTO (Quedas Consecutivas)
-# ===============================
-
 def movimentos(precos):
     alta_atual = 0
     queda_atual = 0
-
     try:
         valores = precos.values
         for i in range(len(valores) - 1, 0, -1):
             if valores[i] > valores[i-1]:
-                if queda_atual > 0:
-                    break
+                if queda_atual > 0: break
                 alta_atual += 1
             elif valores[i] < valores[i-1]:
-                if alta_atual > 0:
-                    break
+                if alta_atual > 0: break
                 queda_atual += 1
             else:
                 break
     except Exception:
         pass
-
     return alta_atual, queda_atual
 
 # ===============================
-# SCANNER
+# SCANNER COMPLETO
 # ===============================
 
 def executar_scanner(lista_tickers=None):
@@ -114,49 +92,46 @@ def executar_scanner(lista_tickers=None):
         try:
             ativo_b3 = ativo if ativo.endswith('.SA') else f"{ativo}.SA"
             
-            # Download indicador geral via yfinance
             tk = yf.Ticker(ativo_b3)
-            dados = tk.history(period="2y")
+            dados = tk.history(period="1y")
             
             if dados.empty or "Close" not in dados:
                 continue
 
             precos = dados["Close"].dropna()
-            if len(precos) < 200:
+            if len(precos) < 50:
                 continue
 
             preco = float(precos.iloc[-1])
             rsi = calcular_rsi(precos)
             altas_seq, quedas_seq = movimentos(precos)
             
-            mm200_series = precos.rolling(200).mean()
+            mm200_series = precos.rolling(len(precos)).mean()
             mm200 = float(mm200_series.iloc[-1]) if not pd.isna(mm200_series.iloc[-1]) else preco
-            
             tendencia = "ALTA" if preco > mm200 else "BAIXA"
             
-            suporte = float(precos.tail(120).quantile(.15))
-            resistencia = float(precos.tail(120).quantile(.85))
+            suporte = float(precos.tail(120).quantile(.15)) if len(precos) >= 120 else float(precos.min())
+            resistencia = float(precos.tail(120).quantile(.85)) if len(precos) >= 120 else float(precos.max())
 
             dist_suporte_pct = round(((preco - suporte) / suporte) * 100, 2) if suporte > 0 else 0.0
             dist_resistencia_pct = round(((resistencia - preco) / preco) * 100, 2) if preco > 0 else 0.0
 
-            # BUSCA AS VARIAÇÕES % DIRETAS DA B3
-            ultimas_5_var = obter_variacoes_reais_b3(ativo)
+            # Variação real B3
+            ultimas_5_var = obter_variacoes_oficiais_b3(ativo)
             
-            # FALLBACK SE A API DA B3 ESTIVER INDISPONÍVEL
+            # Fallback caso a API externa falhe
             if not ultimas_5_var or len(ultimas_5_var) < 5:
-                pct = precos.pct_change().dropna()
+                datas_inteiras = pd.date_range(start=precos.index.min(), end=precos.index.max(), freq='B')
+                precos_corrigidos = precos.reindex(datas_inteiras).ffill()
+                pct = precos_corrigidos.pct_change() * 100
+                pct = pct[pct.index.isin(precos.index)].dropna()
                 ultimas_5_var = [round(float(v), 2) for v in pct.iloc[:-1].tail(5).iloc[::-1].values]
 
             score = 0
-            if tendencia == "ALTA":
-                score += 35
-            if rsi < 45:
-                score += 25
-            if quedas_seq >= 3:
-                score += 25
-            if preco > suporte:
-                score += 15
+            if tendencia == "ALTA": score += 35
+            if rsi < 45: score += 25
+            if quedas_seq >= 3: score += 25
+            if preco > suporte: score += 15
 
             resultado.append({
                 "Ativo": ativo,
@@ -174,6 +149,6 @@ def executar_scanner(lista_tickers=None):
             })
 
         except Exception as e:
-            print(f"Erro ao processar ativo {ativo}: {e}")
+            print(f"Erro no ativo {ativo}: {e}")
 
     return sorted(resultado, key=lambda x: x["Score"], reverse=True)

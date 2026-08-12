@@ -8,7 +8,7 @@
 </head>
 <body style="background-color: #0b0f19; color: #ffffff; font-family: sans-serif; padding: 25px;">
 
-    <div style="max-width: 1200px; margin: 0 auto;">
+    <div style="max-width: 1300px; margin: 0 auto;">
         
         <h1 style="text-align: center; color: #ffffff; font-weight: bold; margin-bottom: 20px;">
             📊 Scanner B3 Pro
@@ -24,30 +24,40 @@
                 <table class="table" style="color: #ffffff; margin-bottom: 0;">
                     <thead>
                         <tr style="border-bottom: 2px solid #334155;">
-                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Ação</th>
+                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Score</th>
+                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Ativo</th>
                             <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Preço Atual</th>
+                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Var (5D)</th>
+                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Status</th>
                             <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Últimos 5 Fechamentos (Antigo → Recente)</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for acao in dados %}
                         <tr style="border-bottom: 1px solid #1e293b;">
+                            <td style="background-color: #151c2c; color: #f59e0b; font-weight: bold; padding: 12px;">
+                                ⭐ {{ acao.score }}
+                            </td>
                             <td style="background-color: #151c2c; color: #38bdf8; font-weight: bold; padding: 12px;">
                                 {{ acao.ticker }}
                             </td>
                             <td style="background-color: #151c2c; color: #ffffff; font-weight: bold; padding: 12px;">
                                 R$ {{ acao.cotacao_atual }}
                             </td>
+                            <td style="background-color: #151c2c; padding: 12px; color: {% if acao.variacao >= 0 %}#10b981{% else %}#ef4444{% endif %}; font-weight: bold;">
+                                {{ acao.variacao }}%
+                            </td>
                             <td style="background-color: #151c2c; padding: 12px;">
-                                {% if acao.fechamentos_5d is iterable and acao.fechamentos_5d is not string %}
-                                    {% for preco in acao.fechamentos_5d %}
-                                        <span style="background-color: #0284c7; color: #ffffff; font-size: 0.85em; padding: 5px 9px; border-radius: 5px; margin-right: 4px; display: inline-block; font-weight: 600;">
-                                            R$ {{ "%.2f"|format(preco) }}
-                                        </span>
-                                    {% endfor %}
-                                {% else %}
-                                    <span style="color: #ef4444;">{{ acao.fechamentos_5d }}</span>
-                                {% endif %}
+                                <span style="background-color: {% if acao.status == 'OPORTUNIDADE' %}#059669{% else %}#475569{% endif %}; color: #ffffff; font-size: 0.75em; padding: 4px 8px; border-radius: 4px; font-weight: bold;">
+                                    {{ acao.status }}
+                                </span>
+                            </td>
+                            <td style="background-color: #151c2c; padding: 12px;">
+                                {% for preco in acao.fechamentos_5d %}
+                                    <span style="background-color: #0284c7; color: #ffffff; font-size: 0.85em; padding: 5px 9px; border-radius: 5px; margin-right: 4px; display: inline-block; font-weight: 600;">
+                                        R$ {{ "%.2f"|format(preco) }}
+                                    </span>
+                                {% endfor %}
                             </td>
                         </tr>
                         {% endfor %}

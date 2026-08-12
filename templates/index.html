@@ -5,92 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scanner B3 Pro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { 
-            background-color: #0b0f19 !important; 
-            color: #ffffff !important; 
-            font-family: system-ui, -apple-system, sans-serif; 
-        }
-        .main-container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        .card-custom { 
-            background-color: #151c2c !important; 
-            border: 1px solid #1e293b !important; 
-            border-radius: 10px; 
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        }
-        h1, h3 {
-            color: #ffffff !important;
-            font-weight: 700 !important;
-        }
-        .table-custom { 
-            width: 100%;
-            margin-top: 15px;
-            border-collapse: collapse;
-        }
-        .table-custom th { 
-            background-color: #1e293b !important; 
-            color: #38bdf8 !important; 
-            padding: 12px 15px;
-            text-align: left;
-            font-size: 0.9em;
-            text-transform: uppercase;
-            border-bottom: 2px solid #334155;
-        }
-        .table-custom td { 
-            padding: 12px 15px;
-            border-bottom: 1px solid #1e293b; 
-            vertical-align: middle; 
-            color: #f1f5f9 !important;
-        }
-        .ticker-text {
-            color: #38bdf8 !important;
-            font-weight: bold;
-            font-size: 1.05em;
-        }
-        .price-badge { 
-            background-color: #0284c7; 
-            color: #ffffff !important; 
-            font-size: 0.85em; 
-            padding: 5px 9px; 
-            border-radius: 5px; 
-            margin-right: 4px; 
-            font-weight: 600; 
-            display: inline-block;
-        }
-    </style>
 </head>
-<body class="p-4">
+<body style="background-color: #0b0f19; color: #ffffff; font-family: sans-serif; padding: 25px;">
 
-    <div class="main-container">
-        <h1 class="mb-4 text-center">📊 Scanner B3 Pro</h1>
+    <div style="max-width: 1200px; margin: 0 auto;">
+        
+        <h1 style="text-align: center; color: #ffffff; font-weight: bold; margin-bottom: 20px;">
+            📊 Scanner B3 Pro
+        </h1>
 
-        <div class="card-custom">
-            <h3>Ranking de Oportunidades</h3>
+        <div style="background-color: #151c2c; border: 1px solid #1e293b; border-radius: 10px; padding: 20px;">
+            
+            <h3 style="color: #ffffff; font-weight: bold; margin-bottom: 20px;">
+                Ranking de Oportunidades
+            </h3>
+
             <div class="table-responsive">
-                <table class="table-custom">
+                <table class="table" style="color: #ffffff; margin-bottom: 0;">
                     <thead>
-                        <tr>
-                            <th>Ação</th>
-                            <th>Preço Atual</th>
-                            <th>Últimos 5 Fechamentos (Antigo → Recente)</th>
+                        <tr style="border-bottom: 2px solid #334155;">
+                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Ação</th>
+                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Preço Atual</th>
+                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Últimos 5 Fechamentos (Antigo → Recente)</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for acao in dados %}
-                        <tr>
-                            <td><span class="ticker-text">{{ acao.ticker }}</span></td>
-                            <td><strong>R$ {{ acao.cotacao_atual }}</strong></td>
-                            <td>
+                        <tr style="border-bottom: 1px solid #1e293b;">
+                            <td style="background-color: #151c2c; color: #38bdf8; font-weight: bold; padding: 12px;">
+                                {{ acao.ticker }}
+                            </td>
+                            <td style="background-color: #151c2c; color: #ffffff; font-weight: bold; padding: 12px;">
+                                R$ {{ acao.cotacao_atual }}
+                            </td>
+                            <td style="background-color: #151c2c; padding: 12px;">
                                 {% if acao.fechamentos_5d is iterable and acao.fechamentos_5d is not string %}
                                     {% for preco in acao.fechamentos_5d %}
-                                        <span class="price-badge">R$ {{ "%.2f"|format(preco) }}</span>
+                                        <span style="background-color: #0284c7; color: #ffffff; font-size: 0.85em; padding: 5px 9px; border-radius: 5px; margin-right: 4px; display: inline-block; font-weight: 600;">
+                                            R$ {{ "%.2f"|format(preco) }}
+                                        </span>
                                     {% endfor %}
                                 {% else %}
-                                    <span class="text-danger">{{ acao.fechamentos_5d }}</span>
+                                    <span style="color: #ef4444;">{{ acao.fechamentos_5d }}</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -98,6 +54,7 @@
                     </tbody>
                 </table>
             </div>
+
         </div>
     </div>
 

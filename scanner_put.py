@@ -81,28 +81,14 @@ def executar_scanner(lista_tickers=None):
         try:
             ativo_b3 = ativo if ativo.endswith('.SA') else f"{ativo}.SA"
             
-            # auto_adjust=False garante cotações nominais (sem desconto retroativo de proventos)
-            dados = yf.download(ativo_b3, period="2y", auto_adjust=False, progress=False)
+            # Utilizar Ticker.history() força o Yahoo a não injetar o MultiIndex nem forçar o Adj Close
+            tk = yf.Ticker(ativo_b3)
+            dados = tk.history(period="2y", auto_adjust=False)
             
-            if dados.empty:
+            if dados.empty or "Close" not in dados:
                 continue
 
-            # Tratamento rígido de colunas para isolar o 'Close' nominal da B3
-            if isinstance(dados.columns, pd.MultiIndex):
-                if 'Close' in dados.columns.get_level_values(0):
-                    precos = dados['Close'].iloc[:, 0]
-                else:
-                    precos = dados.iloc[:, 0]
-            else:
-                if 'Close' in dados:
-                    precos = dados['Close']
-                else:
-                    continue
-
-            if isinstance(precos, pd.DataFrame):
-                precos = precos.iloc[:, 0]
-
-            precos = precos.dropna()
+            precos = dados["Close"].dropna()
             if len(precos) < 200:
                 continue
 
@@ -121,7 +107,7 @@ def executar_scanner(lista_tickers=None):
             dist_suporte_pct = round(((preco - suporte) / suporte) * 100, 2) if suporte > 0 else 0.0
             dist_resistencia_pct = round(((resistencia - preco) / preco) * 100, 2) if preco > 0 else 0.0
 
-            # Desconsidera o pregão de hoje (:-1) e calcula a variação percentual exata do Investing.com
+            # Pega os 5 pregões anteriores encerrados
             variacoes_pct = (precos.pct_change().dropna().tail(6).iloc[:-1] * 100).iloc[::-1]
             ultimas_5_var = [round(float(v), 2) for v in variacoes_pct.values]
 

@@ -1,50 +1,63 @@
-import json
-import subprocess
+import yfinance as yf
+import pandas as pd
 from flask import Flask, render_template
 
 app = Flask(__name__)
 
+# Sua lista de ativos padrão da B3
+ATIVOS = [
+    "ABEV3", "AXTA3", "B3SA3", "BBAS3",
+    "BBSE3", "BRAP4", "CMIG4", "CSAN3",
+    "ITUB4", "ITUB3", "ITSA4", "PETR3", 
+    "GGBR4", "VALE3", "WEGE3"
+]
 
-def obter_dados_acao(ticker):
-    # Executa o script do B3Analysis passando o ticker desejado
-    resultado = subprocess.run(
-        ["python", "scripts/fetch_stock.py", ticker],
-        capture_output=True,
-        text=True,
-    )
-
-    # Converte o retorno em formato JSON para um dicionário Python
+def obter_variacoes(ticker, dias=5):
+    """
+    Calcula as últimas variações percentuais usando EXCLUSIVAMENTE
+    o preço de fechamento (Close) não ajustado via yfinance.
+    """
     try:
-        dados = json.loads(resultado.stdout)
-        return dados
-    except json.JSONDecodeError:
+        # Pega os dados dos últimos 30 dias para ter margem segura
+        df = yf.Ticker(f"{ticker}.SA").history(period="1mo")
+        
+        if df.empty or len(df) < dias + 1:
+            return None
+            
+        precos = df['Close'].dropna()
+        if len(precos) < dias + 1:
+            return None
+            
+        variacoes = precos.pct_change() * 100
+        ultimas = variacoes.dropna().tail(dias).iloc[::-1]
+        
+        return [round(float(v), 2) for v in ultimas]
+    except Exception as e:
+        print(f"Erro ao buscar {ticker}: {e}")
         return None
 
-
-@app.route("/analise/<ticker>")
-def analisar(ticker):
-    # 1. Pega os dados usando o B3Analysis
-    dados = obter_dados_acao(ticker)
-
-    if not dados:
-        return "Erro ao carregar dados da ação", 400
-
-    # 2. Sua lógica de Score / Filtros do seu Scanner B3
-    # Exemplo: aplicando seu cálculo com os dados obtidos
-    pe = dados.get("pe_ttm", 0)
-    ey = dados.get("earnings_yield", 0)
-
-    score_customizado = 0
-    if ey > 0.15:  # Se Earnings Yield for maior que 15%
-        score_customizado += 50
-    if pe < 6:  # Se P/L for menor que 6
-        score_customizado += 50
-
-    # 3. Envia os dados e o score calculado para a interface web
-    return render_template(
-        "dashboard.html", dados=dados, score=score_customizado
-    )
-
+@app.route("/")
+def index():
+    resultados = []
+    
+    for ticker in ATIVOS:
+        vars_diarias = obter_variacoes(ticker, dias=5)
+        if vars_diarias:
+            # Conta quantas quedas consecutivas ocorreram no início da lista
+            quedas_consecutivas = 0
+            for v in vars_diarias:
+                if v < 0:
+                    quedas_consecutivas += 1
+                else:
+                    break
+            
+            resultados.append({
+                "ticker": ticker,
+                "variacoes": vars_diarias,
+                "quedas": quedas_consecutivas
+            })
+            
+    return render_template("dashboard.html", resultados=resultados)
 
 if __name__ == "__main__":
     app.run(debug=True)

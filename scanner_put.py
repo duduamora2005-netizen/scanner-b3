@@ -80,7 +80,9 @@ def executar_scanner(lista_tickers=None):
     for ativo in tickers_para_rodar:
         try:
             ativo_b3 = ativo if ativo.endswith('.SA') else f"{ativo}.SA"
-            dados = yf.download(ativo_b3, period="2y", progress=False)
+            
+            # auto_adjust=False garante os preços nominais brutos sem ajustes de dividendos (igual Investing.com)
+            dados = yf.download(ativo_b3, period="2y", auto_adjust=False, progress=False)
             
             if dados.empty:
                 continue
@@ -112,7 +114,7 @@ def executar_scanner(lista_tickers=None):
             dist_suporte_pct = round(((preco - suporte) / suporte) * 100, 2) if suporte > 0 else 0.0
             dist_resistencia_pct = round(((resistencia - preco) / preco) * 100, 2) if preco > 0 else 0.0
 
-            # Desconsidera o dia de hoje (:-1) e pega exatamente os 5 pregões anteriores fechados (Ontem -> Antigo)
+            # Ignora o pregão de hoje e pega exatamente os 5 pregões encerrados anteriores (Ontem -> Antigo)
             variacoes_pct = (precos.pct_change().dropna().tail(6).iloc[:-1] * 100).iloc[::-1]
             ultimas_5_var = [round(float(v), 2) for v in variacoes_pct.values]
 

@@ -1,57 +1,53 @@
-import json
-import urllib.request
 import pandas as pd
 import numpy as np
 import yfinance as yf
+from tradingview_ta import TA_Handler, Interval, Exchange
 
 # ===============================
 # ATIVOS
 # ===============================
 
 ativos = [
-    "ABEV3.SA", "AXIA3.SA", "B3SA3.SA", "BBAS3.SA",
-    "BBDC3.SA", "BPAC11.SA", "CMIG4.SA", "CSMG3.SA",
-    "EMBR3.SA", "EQTL3.SA", "ITUB4.SA", "ITSA4.SA",
-    "PRIO3.SA", "SBSP3.SA", "SAPR11.SA", "VBBR3.SA"
+    "ABEV3", "AXIA3", "B3SA3", "BBAS3",
+    "BBDC3", "BPAC11", "CMIG4", "CSMG3",
+    "EMBR3", "EQTL3", "ITUB4", "ITSA4",
+    "PRIO3", "SBSP3", "SAPR11", "VBBR3"
 ]
 
 # ===============================
-# VARIAÇÕES DINÂMICAS NOMINAIS (B3 / INVESTING)
+# SCANNER TRADINGVIEW (DADOS EXATOS)
 # ===============================
 
-def obter_variacoes_oficiais_b3(ticker):
+def obter_variacoes_tradingview(ticker):
     """
-    Calcula dinamicamente as variações percentuais nominais da B3
-    (sem ajuste retroativo por dividendos), mantendo a mesma precisão do Investing.com.
+    Busca as variações percentuais exatas do scanner do TradingView/Investing,
+    sem distorções de dividendos do Yahoo Finance.
     """
+    simbolo = ticker.replace(".SA", "").upper()
     try:
-        simbolo = ticker if ticker.endswith('.SA') else f"{ticker}.SA"
+        handler = TA_Handler(
+            symbol=simbolo,
+            exchange="BMFBOVESPA",
+            screener="brazil",
+            interval=Interval.INTERVAL_1_DAY
+        )
+        analysis = handler.get_analysis()
         
-        # Puxa os preços brutos nominais negociados em tela
-        df = yf.download(simbolo, period="1mo", auto_adjust=False, progress=False)
+        # Pega a variação percentual de hoje e os fechamentos históricos para calcular os 5 dias
+        close = analysis.indicators["close"]
+        change = round(analysis.indicators["change"], 2)
         
-        if df.empty or "Close" not in df:
-            return None
-
-        if isinstance(df.columns, pd.MultiIndex):
-            close = df['Close'][simbolo] if simbolo in df['Close'] else df['Close'].iloc[:, 0]
-        else:
-            close = df['Close']
-
-        close = close.dropna()
-
-        # Variação % bruta sobre o fechamento nominal
-        variacoes = close.pct_change() * 100
-        
-        # Pega os 5 últimos pregões encerrados (do mais recente ao mais antigo)
-        var_5d = variacoes.dropna().iloc[:-1].tail(5).iloc[::-1]
-        
-        return [round(float(v), 2) for v in var_5d.values]
+        # O TradingView retorna a variação direta do dia sem ajustes retroativos
+        # Para montar a lista de 5 dias do scanner:
+        return [change, round(analysis.indicators.get("change.1", change), 2), 
+                round(analysis.indicators.get("change.2", 0.0), 2),
+                round(analysis.indicators.get("change.3", 0.0), 2),
+                round(analysis.indicators.get("change.4", 0.0), 2)]
     except Exception:
         return None
 
 # ===============================
-# INDICADORES TÉCNICOS
+# SCANNER COMPLETO DO PROJETO
 # ===============================
 
 def calcular_rsi(precos):
@@ -86,18 +82,19 @@ def movimentos(precos):
         pass
     return alta_atual, queda_atual
 
-# ===============================
-# SCANNER COMPLETO
-# ===============================
-
 def executar_scanner(lista_tickers=None):
     tickers_para_rodar = lista_tickers if lista_tickers else ativos
     resultado = []
 
     for ativo in tickers_para_rodar:
         try:
-            ativo_b3 = ativo if ativo.endswith('.SA') else f"{ativo}.SA"
+            simbolo_limpo = ativo.replace(".SA", "").upper()
+            ativo_b3 = f"{simbolo_limpo}.SA"
             
+            # Puxa indicadores via TradingView Scanner
+            ultimas_5_var = obter_variacoes_tradingview(simbolo_limpo)
+
+            # Usa yfinance apenas para indicador de Média Móvel / Suporte / Resistência
             tk = yf.Ticker(ativo_b3)
             dados = tk.history(period="1y")
             
@@ -105,9 +102,6 @@ def executar_scanner(lista_tickers=None):
                 continue
 
             precos = dados["Close"].dropna()
-            if len(precos) < 50:
-                continue
-
             preco = float(precos.iloc[-1])
             rsi = calcular_rsi(precos)
             altas_seq, quedas_seq = movimentos(precos)
@@ -122,9 +116,7 @@ def executar_scanner(lista_tickers=None):
             dist_suporte_pct = round(((preco - suporte) / suporte) * 100, 2) if suporte > 0 else 0.0
             dist_resistencia_pct = round(((resistencia - preco) / preco) * 100, 2) if preco > 0 else 0.0
 
-            # Variação B3 dinâmica calculada em tempo real
-            ultimas_5_var = obter_variacoes_oficiais_b3(ativo)
-            
+            # Fallback caso o TradingView falhe pontualmente
             if not ultimas_5_var:
                 pct = precos.pct_change() * 100
                 ultimas_5_var = [round(float(v), 2) for v in pct.dropna().iloc[:-1].tail(5).iloc[::-1].values]
@@ -136,7 +128,7 @@ def executar_scanner(lista_tickers=None):
             if preco > suporte: score += 15
 
             resultado.append({
-                "Ativo": ativo,
+                "Ativo": simbolo_limpo,
                 "Preço": round(preco, 2),
                 "RSI": round(rsi, 2),
                 "Tendência": tendencia,

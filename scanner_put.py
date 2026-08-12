@@ -81,38 +81,53 @@ def executar_scanner(lista_tickers=None):
         try:
             ativo_b3 = ativo if ativo.endswith('.SA') else f"{ativo}.SA"
             
-            # Baixa o historico pelo Ticker
-            tk = yf.Ticker(ativo_b3)
-            dados = tk.history(period="2y", auto_adjust=False)
+            # Baixa os dados sem ajuste automático
+            dados = yf.download(ativo_b3, period="1mo", auto_adjust=False, progress=False)
             
-            if dados.empty or "Close" not in dados:
+            if dados.empty:
                 continue
 
-            precos = dados["Close"].dropna()
-            if len(precos) < 200:
+            # Se retornado em formato MultiIndex, extrai as colunas brutas
+            if isinstance(dados.columns, pd.MultiIndex):
+                close_raw = dados['Close'].iloc[:, 0] if 'Close' in dados.columns.get_level_values(0) else dados.iloc[:, 0]
+                adj_close = dados['Adj Close'].iloc[:, 0] if 'Adj Close' in dados.columns.get_level_values(0) else close_raw
+            else:
+                close_raw = dados['Close'] if 'Close' in dados else dados.iloc[:, 0]
+                adj_close = dados['Adj Close'] if 'Adj Close' in dados else close_raw
+
+            close_raw = close_raw.dropna()
+            adj_close = adj_close.dropna()
+
+            if len(close_raw) < 10:
                 continue
 
-            preco = float(precos.iloc[-1])
-            rsi = calcular_rsi(precos)
-            altas_seq, quedas_seq = movimentos(precos)
+            # RECUPERA O FECHAMENTO BRUTO DA B3 (Investing.com)
+            # Reverte o fator de proporção de dividendos se o Close e Adj Close forem divergentes
+            fator_ajuste = (adj_close / close_raw).iloc[-1]
+            precos_brutos = close_raw if fator_ajuste == 0 else close_raw / (adj_close / close_raw)
             
-            mm200_series = precos.rolling(200).mean()
+            preco = float(precos_brutos.iloc[-1])
+            rsi = calcular_rsi(precos_brutos)
+            altas_seq, quedas_seq = movimentos(precos_brutos)
+            
+            mm200_series = precos_brutos.rolling(len(precos_brutos)).mean()
             mm200 = float(mm200_series.iloc[-1]) if not pd.isna(mm200_series.iloc[-1]) else preco
             
             tendencia = "ALTA" if preco > mm200 else "BAIXA"
             
-            suporte = float(precos.tail(120).quantile(.15))
-            resistencia = float(precos.tail(120).quantile(.85))
+            suporte = float(precos_brutos.tail(120).quantile(.15)) if len(precos_brutos) >= 120 else float(precos_brutos.min())
+            resistencia = float(precos_brutos.tail(120).quantile(.85)) if len(precos_brutos) >= 120 else float(precos_brutos.max())
 
             dist_suporte_pct = round(((preco - suporte) / suporte) * 100, 2) if suporte > 0 else 0.0
             dist_resistencia_pct = round(((resistencia - preco) / preco) * 100, 2) if preco > 0 else 0.0
 
-            # CÁLCULO SEGURO E DIRETO DAS ÚLTIMAS VARIAÇÕES (IGNORANDO O DIA DE HOJE EM ABERTO)
-            # Pega os 6 ultimos pregoes encerrados (exclui o ultimo elemento da serie se o mercado estiver aberto)
-            precos_fechados = precos.iloc[:-1] if len(precos) > 1 else precos
-            variacoes = (precos_fechados.pct_change().dropna().tail(5) * 100).iloc[::-1]
+            # CÁLCULO DAS ÚLTIMAS VARIAÇÕES % EXATAS DO INVESTING
+            # Pega a variação percentual dos preços brutos de fechamento
+            pct_bruto = precos_brutos.pct_change() * 100
             
-            ultimas_5_var = [round(float(v), 2) for v in variacoes.values]
+            # Descarta o dia de hoje (em aberto) e pega exatamente os últimos 5 dias encerrados (do mais recente para o mais antigo)
+            variacoes_5d = pct_bruto.iloc[:-1].tail(5).iloc[::-1]
+            ultimas_5_var = [round(float(v), 2) for v in variacoes_5d.values]
 
             score = 0
             if tendencia == "ALTA":

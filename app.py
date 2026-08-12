@@ -1,29 +1,50 @@
+import json
+import subprocess
 from flask import Flask, render_template
-from scanner_put import executar_scanner
 
 app = Flask(__name__)
 
-@app.route("/")
-def index():
-    try:
-        acoes_dados = executar_scanner()
-        total_acoes = len(acoes_dados)
-        melhor_ticker = acoes_dados[0]["Ativo"].replace(".SA", "") if total_acoes > 0 else "-"
 
-        return render_template(
-            "index.html", 
-            acoes=acoes_dados, 
-            total=total_acoes, 
-            melhor=melhor_ticker
-        )
-    except Exception as e:
-        print("Erro na rota principal:", e)
-        return render_template(
-            "index.html", 
-            acoes=[], 
-            total=0, 
-            melhor="-"
-        )
+def obter_dados_acao(ticker):
+    # Executa o script do B3Analysis passando o ticker desejado
+    resultado = subprocess.run(
+        ["python", "scripts/fetch_stock.py", ticker],
+        capture_output=True,
+        text=True,
+    )
+
+    # Converte o retorno em formato JSON para um dicionário Python
+    try:
+        dados = json.loads(resultado.stdout)
+        return dados
+    except json.JSONDecodeError:
+        return None
+
+
+@app.route("/analise/<ticker>")
+def analisar(ticker):
+    # 1. Pega os dados usando o B3Analysis
+    dados = obter_dados_acao(ticker)
+
+    if not dados:
+        return "Erro ao carregar dados da ação", 400
+
+    # 2. Sua lógica de Score / Filtros do seu Scanner B3
+    # Exemplo: aplicando seu cálculo com os dados obtidos
+    pe = dados.get("pe_ttm", 0)
+    ey = dados.get("earnings_yield", 0)
+
+    score_customizado = 0
+    if ey > 0.15:  # Se Earnings Yield for maior que 15%
+        score_customizado += 50
+    if pe < 6:  # Se P/L for menor que 6
+        score_customizado += 50
+
+    # 3. Envia os dados e o score calculado para a interface web
+    return render_template(
+        "dashboard.html", dados=dados, score=score_customizado
+    )
+
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(debug=True)

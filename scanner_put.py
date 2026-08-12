@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 # ===============================
-# ATIVOS
+# ATIVOS ORIGINAIS
 # ===============================
 
 ativos = [
@@ -36,7 +36,7 @@ def calcular_rsi(precos):
     media_ganho = ganho.rolling(14).mean()
     media_perda = perda.rolling(14).mean()
     rs = media_ganho / media_perda
-    rsi = 100 - (100/(1+rs))
+    rsi = 100 - (100 / (1 + rs))
     return float(rsi.iloc[-1])
 
 # ===============================
@@ -65,12 +65,15 @@ def movimentos(precos):
 # SCANNER
 # ===============================
 
-def rodar_scanner():
+def executar_scanner(lista_tickers=None):
+    tickers_para_rodar = lista_tickers if lista_tickers else ativos
     resultado = []
 
-    for ativo in ativos:
+    for ativo in tickers_para_rodar:
         try:
-            dados = yf.download(ativo, period="2y", progress=False)
+            # Garante o sufixo .SA se não houver
+            ativo_b3 = ativo if ativo.endswith('.SA') else f"{ativo}.SA"
+            dados = yf.download(ativo_b3, period="2y", progress=False)
             
             if dados.empty:
                 continue
@@ -78,7 +81,7 @@ def rodar_scanner():
             precos = dados["Close"]
             
             if isinstance(precos, pd.DataFrame):
-                precos = precos.iloc[:,0]
+                precos = precos.iloc[:, 0]
 
             preco = float(precos.iloc[-1])
             rsi = calcular_rsi(precos)
@@ -98,7 +101,6 @@ def rodar_scanner():
             ultimas_5_var = [round(float(v), 2) for v in variacoes_pct]
 
             score = 0
-            
             if tendencia == "ALTA":
                 score += 35
             if rsi < 45:
@@ -108,22 +110,31 @@ def rodar_scanner():
             if preco > suporte:
                 score += 15
 
+            ticker_limpo = ativo.replace(".SA", "")
+
             resultado.append({
-                "Ativo": ativo,
-                "Preço": round(preco, 2),
-                "RSI": round(rsi, 2),
-                "Tendência": tendencia,
-                "AltasSeq": altas_seq,
-                "QuedasSeq": quedas_seq,
-                "Suporte": round(suporte, 2),
-                "Resistência": round(resistencia, 2),
-                "DistSuportePct": dist_suporte_pct,
-                "DistResistenciaPct": dist_resistencia_pct,
-                "UltimasVariacoes": ultimas_5_var,
-                "Score": score
+                "ticker": ticker_limpo,
+                "preco": round(preco, 2),
+                "rsi": round(rsi, 2),
+                "tendencia": tendencia,
+                "altas_seq": altas_seq,
+                "quedas_seq": quedas_seq,
+                "suporte": round(suporte, 2),
+                "resistencia": round(resistencia, 2),
+                "var_suporte": dist_suporte_pct,
+                "var_resistencia": dist_resistencia_pct,
+                "variacoes_5d": ultimas_5_var,
+                "score": score
             })
 
         except Exception as e:
             print("Erro no ativo:", ativo, e)
 
-    return sorted(resultado, key=lambda x: x["Score"], reverse=True)
+    # Ordena pelo Score do maior para o menor
+    resultado = sorted(resultado, key=lambda x: x["score"], reverse=True)
+
+    # Adiciona a posição do Rank (#1, #2...)
+    for idx, item in enumerate(resultado):
+        item["rank"] = f"#{idx + 1}"
+
+    return resultado

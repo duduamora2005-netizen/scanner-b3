@@ -15,7 +15,6 @@ ativos = [
     "BPAC11.SA",
     "CMIG4.SA",
     "CSMG3.SA",
-    "EMBR3.SA",
     "EQTL3.SA",
     "ITUB4.SA",
     "ITSA4.SA",

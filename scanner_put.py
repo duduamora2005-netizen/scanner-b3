@@ -15,6 +15,7 @@ ativos = [
     "BPAC11.SA",
     "CMIG4.SA",
     "CSMG3.SA",
+    "EMBR3.SA",
     "EQTL3.SA",
     "ITUB4.SA",
     "ITSA4.SA",
@@ -111,8 +112,8 @@ def executar_scanner(lista_tickers=None):
             dist_suporte_pct = round(((preco - suporte) / suporte) * 100, 2) if suporte > 0 else 0.0
             dist_resistencia_pct = round(((resistencia - preco) / preco) * 100, 2) if preco > 0 else 0.0
 
-            # Desconsidera o dia de hoje (.iloc[-6:-1]) e traz os 5 pregões anteriores encerrados (Ontem -> Antigo)
-            variacoes_pct = (precos.pct_change().dropna().iloc[-6:-1] * 100).iloc[::-1]
+            # Desconsidera o dia de hoje (:-1) e pega exatamente os 5 pregões anteriores fechados (Ontem -> Antigo)
+            variacoes_pct = (precos.pct_change().dropna().tail(6).iloc[:-1] * 100).iloc[::-1]
             ultimas_5_var = [round(float(v), 2) for v in variacoes_pct.values]
 
             score = 0

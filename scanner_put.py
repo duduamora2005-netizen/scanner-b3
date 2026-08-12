@@ -10,7 +10,7 @@ def obter_dados_ativo(ticker):
         ticker_b3 = f"{ticker}.SA" if not ticker.endswith('.SA') else ticker
         ativo = yf.Ticker(ticker_b3)
         
-        # Historico recente
+        # Historico de 10 dias para pegar os ultimos 5 fechamentos com seguranca
         df = ativo.history(period="10d")
         fechamentos = df['Close'].dropna().tail(5).tolist()
         
@@ -20,19 +20,23 @@ def obter_dados_ativo(ticker):
         preco_atual = round(float(ativo.fast_info['lastPrice']), 2)
         fechamentos_fmt = [round(float(p), 2) for p in fechamentos]
         
-        # Calculos analiticos para reativar as colunas
+        # Calculos analiticos
         variacao = round(((preco_atual - fechamentos_fmt[0]) / fechamentos_fmt[0]) * 100, 2)
         media_5d = round(sum(fechamentos_fmt) / len(fechamentos_fmt), 2)
         
-        # Score simples baseado na tendencia recente
+        # Preco de entrada estimado e alvo/stop ficticios para manter estrutura anterior
+        preco_entrada = round(preco_atual * 0.98, 2)
+        alvo = round(preco_atual * 1.05, 2)
+        stop = round(preco_atual * 0.95, 2)
         score = round((preco_atual / media_5d) * 10, 1)
-        status = "OPORTUNIDADE" if score > 10 else "NEUTRO"
 
         return {
             'ticker': ticker.upper().replace('.SA', ''),
             'cotacao_atual': preco_atual,
+            'entrada': preco_entrada,
+            'alvo': alvo,
+            'stop': stop,
             'score': score,
-            'status': status,
             'variacao': variacao,
             'fechamentos_5d': fechamentos_fmt
         }
@@ -49,6 +53,5 @@ def executar_scanner(lista_tickers=None):
         if dados:
             resultados.append(dados)
 
-    # Ordena pelo Score (maior para o menor)
     resultados = sorted(resultados, key=lambda x: x['score'], reverse=True)
     return resultados

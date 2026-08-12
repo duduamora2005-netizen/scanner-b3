@@ -84,7 +84,6 @@ def executar_scanner(lista_tickers=None):
             if dados.empty:
                 continue
 
-            # Tratamento para lidar com MultiIndex do yfinance
             if "Close" in dados:
                 precos = dados["Close"]
             else:
@@ -112,7 +111,8 @@ def executar_scanner(lista_tickers=None):
             dist_suporte_pct = round(((preco - suporte) / suporte) * 100, 2) if suporte > 0 else 0.0
             dist_resistencia_pct = round(((resistencia - preco) / preco) * 100, 2) if preco > 0 else 0.0
 
-            variacoes_pct = (precos.pct_change().dropna().tail(5) * 100).iloc[::-1]
+            # Desconsidera o dia de hoje (.iloc[-6:-1]) e traz os 5 pregões anteriores encerrados (Ontem -> Antigo)
+            variacoes_pct = (precos.pct_change().dropna().iloc[-6:-1] * 100).iloc[::-1]
             ultimas_5_var = [round(float(v), 2) for v in variacoes_pct.values]
 
             score = 0

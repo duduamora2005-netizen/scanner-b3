@@ -5,66 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scanner B3 Pro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
+        .card-custom { background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; }
+        .table-custom { background-color: #1e293b; color: #f8fafc; }
+        .table-custom th { background-color: #334155; color: #38bdf8; }
+        .table-custom td { border-color: #334155; vertical-align: middle; color: #ffffff; }
+        .price-badge { background-color: #0284c7; color: #ffffff; font-size: 0.9em; padding: 4px 8px; border-radius: 4px; margin-right: 4px; font-weight: 500; display: inline-block; }
+    </style>
 </head>
-<body style="background-color: #0b0f19; color: #ffffff; font-family: sans-serif; padding: 25px;">
+<body class="p-4">
 
-    <div style="max-width: 1300px; margin: 0 auto;">
-        
-        <h1 style="text-align: center; color: #ffffff; font-weight: bold; margin-bottom: 20px;">
-            📊 Scanner B3 Pro
-        </h1>
+    <div class="container-fluid">
+        <h1 class="mb-4 text-center text-white fw-bold">📊 Scanner B3 Pro</h1>
 
-        <div style="background-color: #151c2c; border: 1px solid #1e293b; border-radius: 10px; padding: 20px;">
-            
-            <h3 style="color: #ffffff; font-weight: bold; margin-bottom: 20px;">
-                Ranking de Oportunidades
-            </h3>
-
+        <div class="card card-custom p-3 mb-4">
+            <h3 class="text-white mb-3">Ranking de Oportunidades</h3>
             <div class="table-responsive">
-                <table class="table" style="color: #ffffff; margin-bottom: 0;">
+                <table class="table table-custom mt-3 align-middle">
                     <thead>
-                        <tr style="border-bottom: 2px solid #334155;">
-                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Score</th>
-                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Ativo</th>
-                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Preço Atual</th>
-                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Var (5D)</th>
-                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Status</th>
-                            <th style="background-color: #1e293b; color: #38bdf8; padding: 12px;">Últimos 5 Fechamentos (Antigo → Recente)</th>
+                        <tr>
+                            <th>Score</th>
+                            <th>Ação</th>
+                            <th>Preço Atual</th>
+                            <th>Entrada</th>
+                            <th>Alvo</th>
+                            <th>Stop</th>
+                            <th>Var (5D)</th>
+                            <th>Últimos 5 Fechamentos (Antigo → Recente)</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for acao in dados %}
-                        <tr style="border-bottom: 1px solid #1e293b;">
-                            <td style="background-color: #151c2c; color: #f59e0b; font-weight: bold; padding: 12px;">
-                                ⭐ {{ acao.score }}
-                            </td>
-                            <td style="background-color: #151c2c; color: #38bdf8; font-weight: bold; padding: 12px;">
-                                {{ acao.ticker }}
-                            </td>
-                            <td style="background-color: #151c2c; color: #ffffff; font-weight: bold; padding: 12px;">
-                                R$ {{ acao.cotacao_atual }}
-                            </td>
-                            <td style="background-color: #151c2c; padding: 12px; color: {% if acao.variacao >= 0 %}#10b981{% else %}#ef4444{% endif %}; font-weight: bold;">
+                        <tr>
+                            <td class="fw-bold text-warning">⭐ {{ acao.score }}</td>
+                            <td><strong class="text-info">{{ acao.ticker }}</strong></td>
+                            <td class="fw-bold">R$ {{ acao.cotacao_atual }}</td>
+                            <td>R$ {{ acao.entrada }}</td>
+                            <td class="text-success fw-bold">R$ {{ acao.alvo }}</td>
+                            <td class="text-danger fw-bold">R$ {{ acao.stop }}</td>
+                            <td class="fw-bold {% if acao.variacao >= 0 %}text-success{% else %}text-danger{% endif %}">
                                 {{ acao.variacao }}%
                             </td>
-                            <td style="background-color: #151c2c; padding: 12px;">
-                                <span style="background-color: {% if acao.status == 'OPORTUNIDADE' %}#059669{% else %}#475569{% endif %}; color: #ffffff; font-size: 0.75em; padding: 4px 8px; border-radius: 4px; font-weight: bold;">
-                                    {{ acao.status }}
-                                </span>
-                            </td>
-                            <td style="background-color: #151c2c; padding: 12px;">
-                                {% for preco in acao.fechamentos_5d %}
-                                    <span style="background-color: #0284c7; color: #ffffff; font-size: 0.85em; padding: 5px 9px; border-radius: 5px; margin-right: 4px; display: inline-block; font-weight: 600;">
-                                        R$ {{ "%.2f"|format(preco) }}
-                                    </span>
-                                {% endfor %}
+                            <td>
+                                {% if acao.fechamentos_5d is iterable and acao.fechamentos_5d is not string %}
+                                    {% for preco in acao.fechamentos_5d %}
+                                        <span class="price-badge">R$ {{ "%.2f"|format(preco) }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="text-danger">{{ acao.fechamentos_5d }}</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-
         </div>
     </div>
 

@@ -1,82 +1,71 @@
+import requests
 import pandas as pd
-import numpy as np
-import yfinance as yf
 
-# ---------------------------------------------------------
-# ATIVOS
-# ---------------------------------------------------------
+# ===============================
+# ATIVOS (Padrão B3 sem .SA)
+# ===============================
 
-ATIVOS = [
-    "ABEV3", "AXTA3", "B3SA3", "BBAS3",
-    "BBSE3", "BRAP4", "CMIG4", "CSAN3",
-    "ITUB4", "ITUB3", "ITSA4", "PETR3", 
-    "GGBR4", "VALE3", "WEGE3"
+ativos = [
+    "ABEV3", "B3SA3", "BBAS3", "BBDC3", 
+    "BPAC11", "CMIG4", "CSMG3", "EMBR3", 
+    "EQTL3", "ITUB4", "ITSA4", "PRIO3", 
+    "SBSP3", "SAPR11", "VBBR3"
 ]
 
-# ---------------------------------------------------------
-# CÁLCULO DAS ÚLTIMAS VARIAÇÕES
-# ---------------------------------------------------------
+# ===============================
+# BUSCAR VARIAÇÕES DIRETAMENTE DA B3
+# ===============================
 
-def obter_variacoes(ticker, quantidade=5):
+def obter_variacoes_b3_oficial(ticker):
     """
-    Calcula as últimas variações percentuais usando EXCLUSIVAMENTE
-    o preço de fechamento (Close) não ajustado.
-    
-    Fórmula:
-    ((Close atual / Close anterior) - 1) * 100
-    
-    Retorna da variação mais recente para a mais antiga.
+    Busca os dados históricos recentes direto da B3 através da API da BRAPI,
+    retornando exatamente os percentuais de fechamento de pregão.
     """
+    simbolo = ticker.replace(".SA", "").upper()
     try:
-        # Busca o histórico recente da B3 via yfinance
-        df = yf.Ticker(f"{ticker}.SA").history(period="1mo")
+        # Endpoint oficial de histórico diário da B3
+        url = f"https://brapi.dev/api/v2/stocks/historical?symbols={simbolo}&range=1mo&interval=1d&sortOrder=desc"
         
-        if df.empty or len(df) < quantidade + 1:
+        response = requests.get(url, timeout=10)
+        if response.status_code != 200:
             return None
             
-        precos = df['Close'].dropna()
+        data = response.json()
+        results = data.get("results", [])
         
-        if len(precos) < quantidade + 1:
+        if not results:
             return None
             
-        variacoes = precos.pct_change() * 100
+        historical = results[0].get("historicalDataPrice", [])
         
-        ultimas = (
-            variacoes
-            .dropna()
-            .tail(quantidade)
-            .iloc[::-1]
-        )
-        
-        return [round(float(v), 2) for v in ultimas]
-        
+        if len(historical) < 6:
+            return None
+            
+        # Calcula a variação percentual dia a dia com base nos fechamentos reais
+        variacoes = []
+        #historical vem ordenado do mais recente para o mais antigo (desc)
+        for i in range(5):
+            atual = historical[i]['close']
+            anterior = historical[i+1]['close']
+            pct = ((atual - anterior) / anterior) * 100
+            variacoes.append(round(pct, 2))
+            
+        return variacoes
     except Exception as e:
-        print(f"Erro ao buscar {ticker}: {e}")
+        print(f"Erro ao buscar B3 para {ticker}: {e}")
         return None
 
-def executar_scanner():
-    print("=== EXECUTANDO SCANNER B3 (PUT) ==-\n")
-    resultados = []
-    
-    for ticker in ATIVOS:
-        vars_diarias = obter_variacoes(ticker, quantidade=5)
-        if vars_diarias:
-            # Conta quantas quedas consecutivas ocorreram no topo da lista
-            quedas = 0
-            for v in vars_diarias:
-                if v < 0:
-                    quedas += 1
-                else:
-                    break
-                    
-            resultados.append({
-                "ticker": ticker,
-                "variacoes": vars_diarias,
-                "quedas_consecutivas": quedas
-            })
-            print(f"Ativo: {ticker} | Variações: {vars_diarias} | Quedas: {quedas}")
-            
-    return resultados
+# ===============================
+# TESTE RÁPIDO DO SCANNER
+# ===============================
 
-if __name__ == "__main__":
-    executar_scanner()
+def executar_scanner_b3():
+    resultado = []
+    for ativo in ativos:
+        variacoes = obter_variacoes_b3_oficial(ativo)
+        if variacoes:
+            resultado.append({
+                "Ativo": ativo,
+                "UltimasVariacoes": variacoes
+            })
+    return resultado

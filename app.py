@@ -6,10 +6,10 @@ app = Flask(__name__)
 
 # Sua lista de ativos padrão da B3
 ATIVOS = [
-    "ABEV3", "AXTA3", "B3SA3", "BBAS3",
-    "BBSE3", "BRAP4", "CMIG4", "CSAN3",
-    "ITUB4", "ITUB3", "ITSA4", "PETR3", 
-    "GGBR4", "VALE3", "WEGE3"
+    "ABEV3", "AXIA3", "B3SA3", "BBAS3",
+    "BBDC3", "BPAC11", "CMIG4", "CSMG3",
+    "EMBR3", "EQTL3", "ITUB4", "ITSA4",
+    "PRIO3", "SBSP3", "SAPR11", "VBBR3"
 ]
 
 def obter_variacoes(ticker, dias=5):
@@ -31,7 +31,7 @@ def obter_variacoes(ticker, dias=5):
         variacoes = precos.pct_change() * 100
         ultimas = variacoes.dropna().tail(dias).iloc[::-1]
         
-        return [round(float(v), 2) for v in ultimas]
+        return [round(float(x), 2) for x in ultimas]
     except Exception as e:
         print(f"Erro ao buscar {ticker}: {e}")
         return None
@@ -39,7 +39,7 @@ def obter_variacoes(ticker, dias=5):
 @app.route("/")
 def index():
     resultados = []
-    
+
     for ticker in ATIVOS:
         vars_diarias = obter_variacoes(ticker, dias=5)
         if vars_diarias:
@@ -50,14 +50,15 @@ def index():
                     quedas_consecutivas += 1
                 else:
                     break
-            
+
             resultados.append({
-                "ticker": ticker,
-                "variacoes": vars_diarias,
-                "quedas": quedas_consecutivas
+                "Ativo": ticker,
+                "UltimasVariacoes": vars_diarias,
+                "QuedasSeq": quedas_consecutivas
             })
-            
-    return render_template("dashboard.html", resultados=resultados)
+
+    return render_template("index.html", resultados=resultados)
 
 if __name__ == "__main__":
+    app.app_context().push()
     app.run(debug=True)

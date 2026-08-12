@@ -1,17 +1,18 @@
+from flask import Flask, render_template
 import requests
 import pandas as pd
 
+# O Gunicorn procura por isso aqui:
+app = Flask(__name__)
+
 def buscar_dados_b3_oficial(ticker):
-    # Formata o ticker para o padrão da B3 (ex: PETR4)
     ticker_limpo = ticker.replace(".SA", "").upper()
-    
-    # Endpoint oficial de dados históricos/diários da B3 integrados via API
     url = f"https://brapi.dev/api/v2/stocks/historical"
     params = {
         "symbols": ticker_limpo,
-        "range": "1mo",       # Pega o último mês para garantir margem de pregões úteis
+        "range": "1mo",
         "interval": "1d",
-        "sortOrder": "desc"   # Traz do mais recente para o mais antigo (Hoje -> Antigo)
+        "sortOrder": "desc"
     }
     
     response = requests.get(url, params=params, timeout=30)
@@ -30,15 +31,22 @@ def buscar_dados_b3_oficial(ticker):
     if len(historical_prices) < 5:
         return None
         
-    # Extrai estritamente os preços brutos de fechamento ('close') de tela oficiais
-    # O campo 'close' representa o valor bruto negociado no pregão daquele dia
     fechamentos_brutos = [item["close"] for item in historical_prices[:5]]
-    
-    # O preço atual (mais recente) é o primeiro da lista
     preco_atual = fechamentos_brutos[0]
     
     return {
         "Ativo": ticker_limpo + ".SA",
         "Preço": f"{preco_atual:.2f}",
-        "UltimasVariacoes": fechamentos_brutos, # Lista com os 5 valores brutos em R$ (Hoje -> Antigo)
+        "UltimasVariacoes": fechamentos_brutos,
     }
+
+# Rota principal (ajuste conforme a sua lógica atual)
+@app.route('/')
+def index():
+    # Aqui você deve chamar a função para os seus ativos e passar para o template
+    # Exemplo:
+    # acoes_data = [buscar_dados_b3_oficial('PETR4'), ...]
+    return render_template('index.html', acoes=[]) 
+
+if __name__ == "__main__":
+    app.run()

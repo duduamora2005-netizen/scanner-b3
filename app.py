@@ -1,83 +1,44 @@
-import yfinance as yf
+import requests
 import pandas as pd
-import numpy as np
-from flask import Flask, render_template
 
-app = Flask(__name__)
-
-# Lista de ativos que você quer monitorar
-ATIVOS = [
-    "ABEV3", "AXIA3", "B3SA3", "BBAS3", "BBDC3", 
-    "BPAC11", "CMIG4", "CSMG3", "EMBR3", "EQTL3", 
-    "ITUB4", "ITSA4", "PRIO3", "SBSP3", "PETR4"
-]
-
-def calcular_rsi(precos):
-    delta = precos.diff()
-    ganho = delta.clip(lower=0)
-    perda = -delta.clip(upper=0)
-    media_ganho = ganho.rolling(14).mean()
-    media_perda = perda.rolling(14).mean()
-    rs = media_ganho / media_perda
-    rsi = 100 - (100 / (1 + rs))
-    return float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
-
-@app.route("/")
-def index():
-    resultados = []
-    tickers_b3 = [f"{t}.SA" for t in ATIVOS]
+def buscar_dados_b3_oficial(ticker):
+    # Formata o ticker para o padrão da B3 (ex: PETR4)
+    ticker_limpo = ticker.replace(".SA", "").upper()
     
-    # Baixa dados em lote para evitar bloqueios do Yahoo
-    try:
-        dados = yf.download(tickers_b3, period="1y", group_by="ticker", progress=False)
-    except:
-        dados = pd.DataFrame()
-
-    for ticker in ATIVOS:
-        ativo_b3 = f"{ticker}.SA"
-        # Seleciona o DataFrame do ativo específico
-        df = dados[ativo_b3] if len(ATIVOS) > 1 else dados
+    # Endpoint oficial de dados históricos/diários da B3 integrados via API
+    url = f"https://brapi.dev/api/v2/stocks/historical"
+    params = {
+        "symbols": ticker_limpo,
+        "range": "1mo",       # Pega o último mês para garantir margem de pregões úteis
+        "interval": "1d",
+        "sortOrder": "desc"   # Traz do mais recente para o mais antigo (Hoje -> Antigo)
+    }
+    
+    response = requests.get(url, params=params, timeout=30)
+    
+    if response.status_code != 200:
+        return None
         
-        if df.empty or "Close" not in df.columns:
-            continue
-            
-        precos = df['Close'].dropna()
-        if len(precos) < 50:
-            continue
-            
-        preco = float(precos.iloc[-1])
-        rsi = calcular_rsi(precos)
+    data = response.json()
+    results = data.get("results", [])
+    
+    if not results:
+        return None
         
-        # Pega os 5 últimos fechamentos absolutos (R$)
-        ultimos_5_fechamentos = [round(float(v), 2) for v in precos.tail(5).iloc[::-1].values]
+    historical_prices = results[0].get("historicalDataPrice", [])
+    
+    if len(historical_prices) < 5:
+        return None
         
-        # Lógica de tendência e score simplificada
-        mm200 = float(precos.rolling(200).mean().iloc[-1])
-        tendencia = "ALTA" if preco > mm200 else "BAIXA"
-        
-        suporte = float(precos.tail(120).min())
-        resistencia = float(precos.tail(120).max())
-        
-        score = (35 if tendencia == "ALTA" else 0) + (25 if rsi < 45 else 0)
-        
-        resultados.append({
-            "Ativo": ticker,
-            "Preço": round(preco, 2),
-            "RSI": round(rsi, 2),
-            "Tendência": tendencia,
-            "Suporte": round(suporte, 2),
-            "Resistência": round(resistencia, 2),
-            "DistSuportePct": round(((preco - suporte)/suporte)*100, 2),
-            "DistResistenciaPct": round(((resistencia - preco)/preco)*100, 2),
-            "UltimasVariacoes": ultimos_5_fechamentos,
-            "Score": score
-        })
-
-    resultados_ordenados = sorted(resultados, key=lambda x: x["Score"], reverse=True)
-    return render_template("index.html", 
-                           acoes=resultados_ordenados, 
-                           total=len(resultados_ordenados), 
-                           melhor=resultados_ordenados[0]["Ativo"] if resultados_ordenados else "-")
-
-if __name__ == "__main__":
-    app.run(debug=True)
+    # Extrai estritamente os preços brutos de fechamento ('close') de tela oficiais
+    # O campo 'close' representa o valor bruto negociado no pregão daquele dia
+    fechamentos_brutos = [item["close"] for item in historical_prices[:5]]
+    
+    # O preço atual (mais recente) é o primeiro da lista
+    preco_atual = fechamentos_brutos[0]
+    
+    return {
+        "Ativo": ticker_limpo + ".SA",
+        "Preço": f"{preco_atual:.2f}",
+        "UltimasVariacoes": fechamentos_brutos, # Lista com os 5 valores brutos em R$ (Hoje -> Antigo)
+    }

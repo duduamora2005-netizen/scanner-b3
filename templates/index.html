@@ -36,7 +36,7 @@
                             <td><strong>{{ acao.ticker }}</strong></td>
                             <td>R$ {{ acao.cotacao_atual }}</td>
                             <td>
-                                {% if acao.fechamentos_5d is list %}
+                                {% if acao.fechamentos_5d is iterable and acao.fechamentos_5d is not string %}
                                     {% for preco in acao.fechamentos_5d %}
                                         <span class="price-badge">R$ {{ "%.2f"|format(preco) }}</span>
                                     {% endfor %}

@@ -1,42 +1,37 @@
 from flask import Flask, render_template
-import requests
+import yfinance as yf
 import pandas as pd
 
 app = Flask(__name__)
 
-def buscar_dados_b3_oficial(ticker):
-    ticker_limpo = ticker.replace(".SA", "").upper()
-    url = f"https://brapi.dev/api/v2/stocks/historical"
-    params = {
-        "symbols": ticker_limpo,
-        "range": "1mo",
-        "interval": "1d",
-        "sortOrder": "desc"
-    }
-    
+def buscar_dados_yfinance(ticker):
     try:
-        response = requests.get(url, params=params, timeout=10)
-        if response.status_code != 200:
-            return None
-            
-        data = response.json()
-        results = data.get("results", [])
-        if not results:
-            return None
-            
-        historical_prices = results[0].get("historicalDataPrice", [])
-        if len(historical_prices) < 5:
-            return None
-            
-        # Extrai os preços brutos de fechamento ('close') oficiais de tela
-        fechamentos_brutos = [item["close"] for item in historical_prices[:5]]
-        preco_atual = fechamentos_brutos[0]
+        # Garante o sufixo .SA para a B3
+        ticker_completo = ticker if ticker.endswith(".SA") else ticker + ".SA"
         
-        # Cálculo básico de variação / tendência simples baseada nos últimos preços
+        # Puxa os dados diários do último mês
+        df = yf.download(ticker_completo, period="1mo", interval="1d", progress=False)
+        
+        if df.empty or len(df) < 5:
+            return None
+            
+        # Trata o DataFrame do yfinance para extrair os últimos fechamentos
+        fechamentos = df['Close'].dropna().tail(5).tolist()
+        
+        # Se vier em formato de Series aninhada do pandas, converte para float simples
+        fechamentos_brutos = [float(f) for f in fechamentos]
+        
+        if len(fechamentos_brutos) < 5:
+            return None
+            
+        # Inverte para mostrar de hoje -> antigo (conforme o seu layout)
+        fechamentos_brutos.reverse()
+        
+        preco_atual = fechamentos_brutos[0]
         tendencia = "ALTA" if fechamentos_brutos[0] >= fechamentos_brutos[-1] else "BAIXA"
         
         return {
-            "Ativo": ticker_limpo + ".SA",
+            "Ativo": ticker_completo.upper(),
             "Preço": f"{preco_atual:.2f}",
             "Suporte": f"{min(fechamentos_brutos):.2f}",
             "DistSuportePct": "0.0",
@@ -48,7 +43,8 @@ def buscar_dados_b3_oficial(ticker):
             "QuedasSeq": 0,
             "Score": 50
         }
-    except:
+    except Exception as e:
+        print(f"Erro ao buscar {ticker}: {e}")
         return None
 
 @app.route('/')
@@ -62,7 +58,7 @@ def index():
     
     acoes_processadas = []
     for ticker in lista_tickers:
-        dados = buscar_dados_b3_oficial(ticker)
+        dados = buscar_dados_yfinance(ticker)
         if dados:
             acoes_processadas.append(dados)
             

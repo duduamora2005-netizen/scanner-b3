@@ -1,58 +1,54 @@
 import yfinance as yf
 
-# Lista de tickers que você deseja analisar
 TICKERS_PADRAO = [
     "PETR4", "VALE3", "ITUB4", "BBDC4", "BBAS3", 
     "ABEV3", "MGLU3", "RENT3", "WEGE3", "VBBR3"
 ]
 
-def obter_ultimos_fechamentos(ticker):
-    """
-    Consulta exclusivamente o Yahoo Finance e retorna os últimos 5 preços
-    oficiais de fechamento em ordem cronológica (do mais antigo para o mais recente).
-    """
+def obter_dados_ativo(ticker):
     try:
         ticker_b3 = f"{ticker}.SA" if not ticker.endswith('.SA') else ticker
         ativo = yf.Ticker(ticker_b3)
         
-        # Puxa histórico recente (10 dias para cobrir finais de semana e feriados)
+        # Historico recente
         df = ativo.history(period="10d")
-        
-        # Seleciona apenas os preços de fechamento (Close)
-        fechamentos = df['Close'].dropna().tail(5)
+        fechamentos = df['Close'].dropna().tail(5).tolist()
         
         if len(fechamentos) < 5:
-            return "Não foi encontrado."
-        
-        # Retorna a lista simples de valores em Reais (R$)
-        return [round(float(preco), 2) for preco in fechamentos.tolist()]
-    except Exception:
-        return "Não foi encontrado."
+            return None
 
+        preco_atual = round(float(ativo.fast_info['lastPrice']), 2)
+        fechamentos_fmt = [round(float(p), 2) for p in fechamentos]
+        
+        # Calculos analiticos para reativar as colunas
+        variacao = round(((preco_atual - fechamentos_fmt[0]) / fechamentos_fmt[0]) * 100, 2)
+        media_5d = round(sum(fechamentos_fmt) / len(fechamentos_fmt), 2)
+        
+        # Score simples baseado na tendencia recente
+        score = round((preco_atual / media_5d) * 10, 1)
+        status = "OPORTUNIDADE" if score > 10 else "NEUTRO"
+
+        return {
+            'ticker': ticker.upper().replace('.SA', ''),
+            'cotacao_atual': preco_atual,
+            'score': score,
+            'status': status,
+            'variacao': variacao,
+            'fechamentos_5d': fechamentos_fmt
+        }
+    except Exception:
+        return None
 
 def executar_scanner(lista_tickers=None):
     if not lista_tickers:
         lista_tickers = TICKERS_PADRAO
 
     resultados = []
-
     for ticker in lista_tickers:
-        fechamentos = obter_ultimos_fechamentos(ticker)
-        
-        try:
-            ticker_b3 = f"{ticker}.SA" if not ticker.endswith('.SA') else ticker
-            ativo = yf.Ticker(ticker_b3)
-            cotacao_atual = round(ativo.fast_info['lastPrice'], 2)
-        except Exception:
-            cotacao_atual = "N/D"
+        dados = obter_dados_ativo(ticker)
+        if dados:
+            resultados.append(dados)
 
-        resultados.append({
-            'ticker': ticker.upper().replace('.SA', ''),
-            'cotacao_atual': cotacao_atual,
-            'fechamentos_5d': fechamentos
-        })
-
+    # Ordena pelo Score (maior para o menor)
+    resultados = sorted(resultados, key=lambda x: x['score'], reverse=True)
     return resultados
-
-if __name__ == '__main__':
-    print(executar_scanner())

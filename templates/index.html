@@ -4,64 +4,80 @@
     <meta charset="UTF-8">
     <title>Scanner B3 Pro</title>
     <style>
-        body { background: #0b0f19; font-family: Arial, sans-serif; color: #f8fafc; margin: 0; padding: 20px; }
-        header { background: #1e293b; padding: 20px; text-align: center; font-size: 28px; font-weight: bold; border-radius: 10px; margin-bottom: 20px; }
+        body { background: #0b0f19; font-family: Arial, sans-serif; color: #f8fafc; margin: 0; padding-bottom: 50px; font-size: 18px; }
+        header { background: #1e293b; padding: 22px; text-align: center; font-size: 32px; font-weight: bold; color: #ffffff; border-bottom: 2px solid #334155; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .container { padding: 30px; max-width: 1650px; margin: 0 auto; }
+        .cards { display: flex; gap: 20px; margin-bottom: 30px; }
+        .card { background: #1e293b; padding: 22px; border-radius: 12px; flex: 1; box-shadow: 0 4px 6px rgba(0,0,0,0.4); border: 1px solid #334155; }
+        .card h2 { font-size: 15px; color: #94a3b8; margin: 0 0 8px 0; text-transform: uppercase; font-weight: bold; }
+        .card h1 { font-size: 36px; margin: 0; color: #38bdf8; font-weight: bold; }
+        .search-container { margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .search-container h2 { font-size: 24px; margin: 0; color: #e2e8f0; }
+        .controls { display: flex; gap: 12px; align-items: center; }
+        .filter-select, .search-input { padding: 12px 16px; font-size: 18px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #ffffff; outline: none; }
+        table { width: 100%; background: #1e293b; border-radius: 12px; overflow: hidden; border-collapse: collapse; box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
+        th { background: #334155; color: #f8fafc; padding: 16px 10px; text-align: center; font-size: 16px; font-weight: bold; border-bottom: 2px solid #475569; cursor: pointer; }
+        td { padding: 16px 10px; text-align: center; border-bottom: 1px solid #334155; font-size: 18px; }
         
-        table { width: 100%; background: #1e293b; border-radius: 10px; border-collapse: collapse; margin-top: 20px; }
-        th { background: #334155; padding: 15px; text-align: center; }
-        td { padding: 15px; text-align: center; border-bottom: 1px solid #334155; }
-
-        /* Classes de Cor Dinâmicas */
-        .badge-verde { background: rgba(74, 222, 128, 0.2); color: #4ade80; padding: 5px 10px; border-radius: 5px; font-weight: bold; margin: 2px; }
-        .badge-vermelho { background: rgba(248, 113, 113, 0.2); color: #f87171; padding: 5px 10px; border-radius: 5px; font-weight: bold; margin: 2px; }
-        .badge-neutro { background: #334155; color: #f8fafc; padding: 5px 10px; border-radius: 5px; font-weight: bold; margin: 2px; }
+        /* CORES SOLICITADAS */
+        .badge-verde { background: rgba(74, 222, 128, 0.2); color: #4ade80; padding: 4px 6px; border-radius: 5px; font-size: 14px; font-weight: bold; }
+        .badge-vermelho { background: rgba(248, 113, 113, 0.2); color: #f87171; padding: 4px 6px; border-radius: 5px; font-size: 14px; font-weight: bold; }
+        .badge-neutro { background: #334155; color: #f8fafc; padding: 4px 6px; border-radius: 5px; font-size: 14px; font-weight: bold; }
         
-        .var-container { display: flex; justify-content: center; gap: 5px; }
-        .cards { display: flex; gap: 20px; margin-bottom: 20px; }
-        .card { background: #1e293b; padding: 20px; border-radius: 10px; flex: 1; text-align: center; }
+        .var-container { display: flex; justify-content: center; gap: 4px; }
+        .ticker-name { font-size: 20px; font-weight: bold; color: #ffffff; }
+        .alta { color: #4ade80; font-weight: bold; }
+        .baixa { color: #f87171; font-weight: bold; }
+        .score-val { font-size: 24px; color: #38bdf8; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <header>📊 Scanner B3 Pro</header>
 
-<div class="cards">
-    <div class="card"><h2>Ações Analisadas</h2><h1>{{ total }}</h1></div>
-    <div class="card"><h2>Melhor Score (#1)</h2><h1>{{ melhor }}</h1></div>
+<div class="container">
+    <div class="cards">
+        <div class="card"><h2>Ações Analisadas</h2><h1>{{ total }}</h1></div>
+        <div class="card"><h2>Melhor Score (#1)</h2><h1>{{ melhor }}</h1></div>
+    </div>
+
+    <div class="search-container">
+        <h2>Ranking de Oportunidades</h2>
+        <div class="controls">
+            <select id="filterTendencia" class="filter-select"><option value="TODAS">📈 Tendência: Todas</option></select>
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Pesquisar ação...">
+        </div>
+    </div>
+    
+    <table id="tabelaAcoes">
+        <thead>
+            <tr>
+                <th>Rank</th><th>Ação</th><th>Preço</th><th>Suporte</th><th>Resistência</th><th>RSI</th><th>Tendência</th><th>Últimos 5 Fechamentos R$ (Hoje ➔ Antigo)</th><th>Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for acao in acoes %}
+            <tr>
+                <td><span style="color: #94a3b8; font-weight: bold;">#{{ loop.index }}</span></td>
+                <td class="ticker-name">{{ acao.Ativo.replace('.SA', '') }}</td>
+                <td><strong>R$ {{ acao.Preço }}</strong></td>
+                <td>R$ {{ acao.Suporte }}</td>
+                <td>R$ {{ acao.Resistência }}</td>
+                <td>{{ acao.RSI }}</td>
+                <td class="{{ 'alta' if acao.Tendência == 'ALTA' else 'baixa' }}">{{ acao.Tendência }}</td>
+                <td>
+                    <div class="var-container">
+                        {% for v in acao.UltimasVariacoes %}
+                            <!-- AQUI A LÓGICA DE CORES SOLICITADA -->
+                            <span class="badge-{{ v.cor }}">R$ {{ "%.2f"|format(v.valor) }}</span>
+                        {% endfor %}
+                    </div>
+                </td>
+                <td><strong class="score-val">{{ acao.Score }}</strong></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
-
-<table>
-    <thead>
-        <tr>
-            <th>Ação</th>
-            <th>Preço</th>
-            <th>Suporte</th>
-            <th>Resistência</th>
-            <th>Tendência</th>
-            <th>Últimos 5 Fechamentos (Hoje ➔ Antigo)</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for acao in acoes %}
-        <tr>
-            <td><strong>{{ acao.Ativo }}</strong></td>
-            <td>R$ {{ acao.Preço }}</td>
-            <td>R$ {{ acao.Suporte }}</td>
-            <td>R$ {{ acao.Resistência }}</td>
-            <td>{{ acao.Tendência }}</td>
-            <td>
-                <div class="var-container">
-                    {% for v in acao.UltimasVariacoes %}
-                        <span class="badge-{{ v.cor }}">
-                            R$ {{ "%.2f"|format(v.valor) }}
-                        </span>
-                    {% endfor %}
-                </div>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-
 </body>
 </html>

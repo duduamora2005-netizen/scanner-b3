@@ -1,3 +1,5 @@
+import urllib.request
+import json
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -24,6 +26,37 @@ ativos = [
     "SAPR11.SA",
     "VBBR3.SA"
 ]
+
+# ===============================
+# BUSCA VARIAÇÕES OFICIAIS DA B3 (SEM YAHOO)
+# ===============================
+
+def obter_variacoes_reais_b3(ticker):
+    """
+    Busca o histórico de fechamentos reais da B3 via API pública
+    para não depender dos dados com falha do Yahoo Finance.
+    """
+    try:
+        simbolo = ticker.replace(".SA", "").upper()
+        url = f"https://brapi.dev/api/quote/{simbolo}?range=1mo&interval=1d"
+        
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode())
+            history = data['results'][0]['historicalDataPrice']
+            
+            # Converte em DataFrame
+            df = pd.DataFrame(history)
+            df = df.sort_values('date').reset_index(drop=True)
+            
+            # Pega o preço de fechamento seco (close)
+            df['var_pct'] = df['close'].pct_change() * 100
+            
+            # Remove o dia de hoje (em aberto) e pega os últimos 5 dias fechados
+            var_5d = df['var_pct'].dropna().iloc[:-1].tail(5).iloc[::-1]
+            return [round(float(v), 2) for v in var_5d.values]
+    except Exception as e:
+        return None
 
 # ===============================
 # RSI
@@ -81,53 +114,39 @@ def executar_scanner(lista_tickers=None):
         try:
             ativo_b3 = ativo if ativo.endswith('.SA') else f"{ativo}.SA"
             
-            # Baixa os dados sem ajuste automático
-            dados = yf.download(ativo_b3, period="1mo", auto_adjust=False, progress=False)
+            # Download indicador geral via yfinance
+            tk = yf.Ticker(ativo_b3)
+            dados = tk.history(period="2y")
             
-            if dados.empty:
+            if dados.empty or "Close" not in dados:
                 continue
 
-            # Se retornado em formato MultiIndex, extrai as colunas brutas
-            if isinstance(dados.columns, pd.MultiIndex):
-                close_raw = dados['Close'].iloc[:, 0] if 'Close' in dados.columns.get_level_values(0) else dados.iloc[:, 0]
-                adj_close = dados['Adj Close'].iloc[:, 0] if 'Adj Close' in dados.columns.get_level_values(0) else close_raw
-            else:
-                close_raw = dados['Close'] if 'Close' in dados else dados.iloc[:, 0]
-                adj_close = dados['Adj Close'] if 'Adj Close' in dados else close_raw
-
-            close_raw = close_raw.dropna()
-            adj_close = adj_close.dropna()
-
-            if len(close_raw) < 10:
+            precos = dados["Close"].dropna()
+            if len(precos) < 200:
                 continue
 
-            # RECUPERA O FECHAMENTO BRUTO DA B3 (Investing.com)
-            # Reverte o fator de proporção de dividendos se o Close e Adj Close forem divergentes
-            fator_ajuste = (adj_close / close_raw).iloc[-1]
-            precos_brutos = close_raw if fator_ajuste == 0 else close_raw / (adj_close / close_raw)
+            preco = float(precos.iloc[-1])
+            rsi = calcular_rsi(precos)
+            altas_seq, quedas_seq = movimentos(precos)
             
-            preco = float(precos_brutos.iloc[-1])
-            rsi = calcular_rsi(precos_brutos)
-            altas_seq, quedas_seq = movimentos(precos_brutos)
-            
-            mm200_series = precos_brutos.rolling(len(precos_brutos)).mean()
+            mm200_series = precos.rolling(200).mean()
             mm200 = float(mm200_series.iloc[-1]) if not pd.isna(mm200_series.iloc[-1]) else preco
             
             tendencia = "ALTA" if preco > mm200 else "BAIXA"
             
-            suporte = float(precos_brutos.tail(120).quantile(.15)) if len(precos_brutos) >= 120 else float(precos_brutos.min())
-            resistencia = float(precos_brutos.tail(120).quantile(.85)) if len(precos_brutos) >= 120 else float(precos_brutos.max())
+            suporte = float(precos.tail(120).quantile(.15))
+            resistencia = float(precos.tail(120).quantile(.85))
 
             dist_suporte_pct = round(((preco - suporte) / suporte) * 100, 2) if suporte > 0 else 0.0
             dist_resistencia_pct = round(((resistencia - preco) / preco) * 100, 2) if preco > 0 else 0.0
 
-            # CÁLCULO DAS ÚLTIMAS VARIAÇÕES % EXATAS DO INVESTING
-            # Pega a variação percentual dos preços brutos de fechamento
-            pct_bruto = precos_brutos.pct_change() * 100
+            # BUSCA AS VARIAÇÕES % DIRETAS DA B3
+            ultimas_5_var = obter_variacoes_reais_b3(ativo)
             
-            # Descarta o dia de hoje (em aberto) e pega exatamente os últimos 5 dias encerrados (do mais recente para o mais antigo)
-            variacoes_5d = pct_bruto.iloc[:-1].tail(5).iloc[::-1]
-            ultimas_5_var = [round(float(v), 2) for v in variacoes_5d.values]
+            # FALLBACK SE A API DA B3 ESTIVER INDISPONÍVEL
+            if not ultimas_5_var or len(ultimas_5_var) < 5:
+                pct = precos.pct_change().dropna()
+                ultimas_5_var = [round(float(v), 2) for v in pct.iloc[:-1].tail(5).iloc[::-1].values]
 
             score = 0
             if tendencia == "ALTA":

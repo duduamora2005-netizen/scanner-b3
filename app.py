@@ -1,17 +1,21 @@
-import yfinance as yf
+import MetaTrader5 as mt5
 import pandas as pd
 import numpy as np
 from flask import Flask, render_template
 
 app = Flask(__name__)
 
-# Sua lista de ativos padrão da B3
 ATIVOS = [
-    "ABEV3", "AXIA3", "B3SA3", "BBAS3",
-    "BBDC3", "BPAC11", "CMIG4", "CSMG3",
-    "EMBR3", "EQTL3", "ITUB4", "ITSA4",
-    "PRIO3", "SBSP3", "SAPR11", "VBBR3"
+    "ABEV3", "B3SA3", "BBAS3", "BBDC3", 
+    "CMIG4", "ITUB4", "ITSA4", "PRIO3", "SBSP3", "PETR4"
 ]
+
+def inicializar_mt5():
+    if not mt5.initialize():
+        print("Falha ao inicializar o MetaTrader 5. Verifique se ele está aberto.")
+        mt5.shutdown()
+        return False
+    return True
 
 def calcular_rsi(precos):
     try:
@@ -49,15 +53,19 @@ def movimentos(precos):
 def index():
     resultados = []
 
+    if not inicializar_mt5():
+        return "Erro: O MetaTrader 5 precisa estar aberto no computador."
+
     for ticker in ATIVOS:
         try:
-            ativo_b3 = f"{ticker}.SA"
-            df = yf.Ticker(ativo_b3).history(period="1y", auto_adjust=False)
+            rates = mt5.copy_rates_from_pos(ticker, mt5.TIMEFRAME_D1, 0, 300)
             
-            if df.empty or "Close" not in df:
+            if rates is None or len(rates) == 0:
                 continue
 
-            precos = df['Close'].dropna()
+            df = pd.DataFrame(rates)
+            precos = df['close'].dropna()
+            
             if len(precos) < 50:
                 continue
 
@@ -65,11 +73,10 @@ def index():
             rsi = calcular_rsi(precos)
             altas_seq, quedas_seq = movimentos(precos)
 
-            # Variações dos últimos 5 pregões
-            pct = precos.pct_change() * 100
-            ultimas_5_var = [round(float(v), 2) for v in pct.dropna().iloc[:-1].tail(5).iloc[::-1].values]
-            if len(ultimas_5_var) < 5:
-                ultimas_5_var = [0.0, 0.0, 0.0, 0.0, 0.0]
+            # Pega os 5 últimos preços de fechamento brutos (absolutos em Reais)
+            ultimos_5_fechamentos = [round(float(v), 2) for v in precos.tail(5).iloc[::-1].values]
+            if len(ultimos_5_fechamentos) < 5:
+                ultimos_5_fechamentos = [0.0, 0.0, 0.0, 0.0, 0.0]
 
             mm200_series = precos.rolling(len(precos)).mean()
             mm200 = float(mm200_series.iloc[-1]) if not pd.isna(mm200_series.iloc[-1]) else preco
@@ -98,16 +105,16 @@ def index():
                 "Resistência": round(resistencia, 2),
                 "DistSuportePct": dist_suporte_pct,
                 "DistResistenciaPct": dist_resistencia_pct,
-                "UltimasVariacoes": ultimas_5_var,
+                "UltimasVariacoes": ultimos_5_fechamentos, # Agora contém os valores absolutos
                 "Score": score
             })
         except Exception as e:
-            print(f"Erro no ativo {ticker}: {e}")
+            print(f"Erro ao processar o ativo {ticker} no MT5: {e}")
 
-    # Ordena por Score para definir o ranking
+    mt5.shutdown()
+
     resultados_ordenados = sorted(resultados, key=lambda x: x["Score"], reverse=True)
     
-    # Variáveis exigidas pelo topo do seu HTML
     total_acoes = len(resultados_ordenados)
     melhor_ativo = resultados_ordenados[0]["Ativo"] if total_acoes > 0 else "-"
 
